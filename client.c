@@ -81,19 +81,14 @@ int lsdir(char *dname)
 
     while ((dp = readdir (dir)) != NULL)
     {
-        // if(potentialPath)
-        // {
-        //     strcmp(potentialPath,"/");
-        //     strcmp(potentialPath,dp->d_name);
-        //     lsfile(potentialPath);
-        //     continue;
-        // }
-        printf("Dname: %s\nD_NAME: %s\n",dname, dp->d_name);
+       
         char tempString[256];
+        tempString[0] = '\0';
         strcat(tempString,dname);
         strcat(tempString,"/");
         strcat(tempString,dp->d_name);
         lsfile(tempString);
+        tempString[0] = '\0';
     }
 }
 
@@ -190,6 +185,7 @@ int checkForLocalCommand(char* command, char* passedPath)
         int r;
         char *filename, path[1024], cwd[256];
         filename = "./"; // default to CWD
+        printf("P:%s\n",passedPath);
         if (passedPath)
         {
             filename = passedPath;
