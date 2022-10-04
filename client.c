@@ -109,8 +109,9 @@ int checkForLocalCommand(char* command, char* passedPath)
 
         while(getline(&line,&len,fp)!= -1)
         {
-            printf("%s\n",line);
+            printf("%s",line);
         }
+        printf("\n");
         fclose(fp);
         if(line)
         {
