@@ -94,7 +94,6 @@ int lsdir(char *dname)
 
 int checkForLocalCommand(char* command, char* passedPath)
 {
- 
     if(!strcmp("lcat",command))
     {
         FILE* fp;
@@ -252,18 +251,20 @@ int main()
 {
 
 int n;
-char line[MAX], ans[MAX];
+char line[MAX], ans[MAX], tempLine[MAX];
 client_init();
 printf("******** processing loop *********\n");
 while (1)
 {
+    tempLine[0] = '\0';
     printf("input a line : ");
     bzero(line, MAX); // zero out line[ ]
     fgets(line, MAX, stdin); // get a line from stdin
     line[strlen(line)-1] = 0; // kill \n at end
     if (line[0]==0) // exit if NULL line
         exit(0);
-    char* firstPart = strtok(line," ");
+    strcpy(tempLine,line);
+    char* firstPart = strtok(tempLine," ");
     char* secondPart = strtok(NULL," ");
     printf("FIRST:[%s] | SECOND:[%s]\n",firstPart,secondPart);
     if(checkForLocalCommand(firstPart,secondPart))

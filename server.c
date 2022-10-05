@@ -22,9 +22,11 @@ int r, len, n; // help variables
 struct stat mystat, *sp;
 char *t1 = "xwrxwrxwr ";
 char *t2 = " ";
+char bigLine[MAX];
 
 int lsfile(char *fname)
 {
+    int position = 0;
     struct stat fstat, *sp;
     int r, i;
     char ftime[64];
@@ -32,41 +34,62 @@ int lsfile(char *fname)
     if ( (r = lstat(fname, &fstat)) < 0)
     {
         printf("can't stat %s\n", fname);
-        printf("ERRNO: %d\n",errno);
-        exit(1);
+        strcat(bigLine,"Error lsing file")
+        return -1;
     }
     if ((sp->st_mode & 0xF000) == 0x8000) // if (S ISREG())
-        printf("%c",'-');
+        // printf("%c",'-');
+        bigLine[position++] = '-';
     if ((sp->st_mode & 0xF000) == 0x4000) // if (S ISDIR())
-        printf("%c",'d');
+        // printf("%c",'d');
+        bigLine[position++] = 'd';
     if ((sp->st_mode & 0xF000) == 0xA000) // if (S ISLNK())
-        printf("%c",'l');
+        // printf("%c",'l');
+        bigLine[position++] = 'l';
     for (i=8; i >= 0; --i )
     {
         if (sp->st_mode & (1 << i)) // print r|w|x
-            printf("%c", t1[i]);
+            // printf("%c", t1[i]);
+            bigLine[position++] = t[i];
         else
-            printf("%c", t2[i]); // or print
+            // printf("%c", t2[i]); // or print
+            bigLine[position++] = t2[i];
     }
-    printf("%4d ",sp->st_nlink); // link count
-    printf("%4d ",sp->st_gid); // gid
-    printf("%4d ",sp->st_uid); // uid
-    printf("%8d ",sp->st_size); // file size
+    // printf("%4d ",sp->st_nlink); // link count
+    char format[10];
+    format[0] = '\0';
+    bigLine[position] = '\0';
+    // printf("%4d ",sp->st_gid); // gid
+    spritnf(format, "%4d ",sp->st_gid);
+    strcat(bigLine,format);
+    // printf("%4d ",sp->st_uid); // uid
+    sprintf(format,"%4d ",sp->st_uid);
+    strcat(bigLine,format);
+    // printf("%8d ",sp->st_size); // file size
+    sprintf(format,"%8d ",sp->st_size);
+    strcat(bigLine,format);
+
     // print time
     strcpy(ftime, ctime(&sp->st_ctime)); // print time in calendar form
     ftime[strlen(ftime)-1] = 0; // kill \n at end
-    printf("%s ",ftime);
+    // printf("%s ",ftime);
+    strcat(bigLine,ftime);
     // print name
-    printf("%s", basename(fname)); // print file basename
+    // printf("%s", basename(fname)); // print file basename
+    srtcat(bigLine,basename(fname));
     // print > linkname if symbolic file
     if ((sp->st_mode & 0xF000)== 0xA000)
     {
     // use readlink() to read linkname
+        strcat(bigLine,"-> ");
         char linkname[256];
         readlink(fname,linkname,256);
-        printf("-> %s", linkname); // print linked name
+        // printf("-> %s", linkname); // print linked name
+        strcat(bigLine,linkname);
     }
-    printf("\n");
+    strcat(bigLine,"\n");
+    // printf("\n");
+
 }
 
 int lsdir(char *dname)
@@ -93,9 +116,16 @@ int lsdir(char *dname)
     }
 }
 
+void writeToClient()
+{
+    n = write(csock, bigLine, MAX);
+    printf("server: wrote n=%d bytes; ECHO=%s\n", n, bigLine);
+    printf("server: ready for next request\n");
+}
+
 int checkForLocalCommand(char* command, char* passedPath)
 {
- 
+    bigLine[0] = '\0';
     if(!strcmp("cat",command))
     {
         FILE* fp;
@@ -124,12 +154,15 @@ int checkForLocalCommand(char* command, char* passedPath)
     {
         if(!chdir(passedPath))
         {
-            printf("Changed DIR\n");
+            strcpy(bigLine,"Dir Changed!");
+            // writeToClient(bigLine);
         }
         else
         {
-            printf("Error changing DIR\n");
+            strcpy(bigLine,"Error Changing Dir!");
+            // printf("Error changing DIR\n");
         }
+        writeToClient();
         return 1;
     }
     else if (!strcmp("pwd", command))
@@ -247,6 +280,7 @@ int server_init()
 int main()
 {
     char line[MAX];
+    char testLine[MAX];
     server_init();
     while(1)
     { // Try to accept a client request
@@ -267,19 +301,28 @@ int main()
         // Processing loop: client_sock <== data ==> client
         while(1)
         {
-        n = read(csock, line, MAX);
-        if (n==0)
-        {
-            printf("server: client died, server loops\n");
-            close(csock);
-            break;
-        }
-        // show the line string
-        printf("server: read n=%d bytes; line=%s\n", n, line);
-        // echo line to client
-        n = write(csock, line, MAX);
-        printf("server: wrote n=%d bytes; ECHO=%s\n", n, line);
-        printf("server: ready for next request\n");
+            testLine[0] = '\0';
+            n = read(csock, line, MAX);
+            if (n==0)
+            {
+                printf("server: client died, server loops\n");
+                close(csock);
+                break;
+            }
+            // show the line string
+            printf("server: read n=%d bytes; line=%s\n", n, line);
+            strcpy(testLine,line);
+            char* partOne = strtok(testLine," ");
+            char* partTwo = strtok(NULL, " ");
+            printf("Part One: %s\nPart Two: %s\n",partOne,partTwo);
+            if(checkForLocalCommand(partOne,partTwo))
+            {
+                continue;
+            }
+            // echo line to client
+            n = write(csock, line, MAX);
+            printf("server: wrote n=%d bytes; ECHO=%s\n", n, line);
+            printf("server: ready for next request\n");
         }
     }
 }
