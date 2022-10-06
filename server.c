@@ -22,19 +22,19 @@ int r, len, n; // help variables
 struct stat mystat, *sp;
 char *t1 = "xwrxwrxwr ";
 char *t2 = "--------";
-char bigLine[MAX];
+char outgoingBuffer[MAX];
 
 void writeToClient()
 {
-    n = write(csock, bigLine, MAX);
-    printf("server: wrote n=%d bytes; ECHO=%s\n", n, bigLine);
+    n = write(csock, outgoingBuffer, MAX);
+    printf("server: wrote n=%d bytes; ECHO=%s\n", n, outgoingBuffer);
     printf("server: ready for next request\n");
 }
 
-void specialEndBig()
+void insertSpecialEndingChar()
 {
-    bigLine[0] = '\x04';
-    bigLine[1] = '\0';
+    outgoingBuffer[0] = '\x04';
+    outgoingBuffer[1] = '\0';
 }
 int lsfile(char *fname)
 {
@@ -46,60 +46,60 @@ int lsfile(char *fname)
     if ( (r = lstat(fname, &fstat)) < 0)
     {
         printf("can't stat %s\n", fname);
-        strcat(bigLine,"Error lsing file");
+        strcat(outgoingBuffer,"Error lsing file");
         return -1;
     }
     if ((sp->st_mode & 0xF000) == 0x8000) // if (S ISREG())
-        bigLine[position++] = '-';
+        outgoingBuffer[position++] = '-';
     if ((sp->st_mode & 0xF000) == 0x4000) // if (S ISDIR())
-        bigLine[position++] = 'd';
+        outgoingBuffer[position++] = 'd';
     if ((sp->st_mode & 0xF000) == 0xA000) // if (S ISLNK())
-        bigLine[position++] = 'l';
+        outgoingBuffer[position++] = 'l';
     for (i=8; i >= 0; --i )
     {
         if (sp->st_mode & (1 << i)) // print r|w|x
         {
-            bigLine[position++] = t1[i];
+            outgoingBuffer[position++] = t1[i];
         }
         else
         {
-            bigLine[position++] = t2[i];
+            outgoingBuffer[position++] = t2[i];
         }
     }
     char format[10];
     format[0] = '\0';
-    bigLine[position] = '\0';
+    outgoingBuffer[position] = '\0';
     // printf("%4d ",sp->st_nlink); // link count
     sprintf(format,"%4d ",sp->st_nlink);
-    strcat(bigLine,format);
+    strcat(outgoingBuffer,format);
     // printf("%4d ",sp->st_gid); // gid
     sprintf(format, "%4d ",sp->st_gid);
-    strcat(bigLine,format);
+    strcat(outgoingBuffer,format);
     // printf("%4d ",sp->st_uid); // uid
     sprintf(format,"%4d ",sp->st_uid);
-    strcat(bigLine,format);
+    strcat(outgoingBuffer,format);
     // printf("%8d ",sp->st_size); // file size
     sprintf(format,"%8d ",sp->st_size);
-    strcat(bigLine,format);
+    strcat(outgoingBuffer,format);
 
     // print time
     strcpy(ftime, ctime(&sp->st_ctime)); // print time in calendar form
     ftime[strlen(ftime)-1] = 0; // kill \n at end
     // printf("%s ",ftime);
-    strcat(bigLine,ftime);
+    strcat(outgoingBuffer,ftime);
     // print name
     // printf("%s", basename(fname)); // print file basename
-    strcat(bigLine, " ");
-    strcat(bigLine,basename(fname));
+    strcat(outgoingBuffer, " ");
+    strcat(outgoingBuffer,basename(fname));
     // print > linkname if symbolic file
     if ((sp->st_mode & 0xF000)== 0xA000)
     {
     // use readlink() to read linkname
-        strcat(bigLine,"-> ");
+        strcat(outgoingBuffer,"-> ");
         char linkname[256];
         readlink(fname,linkname,256);
         // printf("-> %s", linkname); // print linked name
-        strcat(bigLine,linkname);
+        strcat(outgoingBuffer,linkname);
     }
     writeToClient();
     return 1;
@@ -135,7 +135,7 @@ int lsdir(char *dname)
 
 int checkForLocalCommand(char* command, char* passedPath)
 {
-    bigLine[0] = '\0';
+    outgoingBuffer[0] = '\0';
     if(!strcmp("cat",command))
     {
         FILE* fp;
@@ -164,16 +164,16 @@ int checkForLocalCommand(char* command, char* passedPath)
     {
         if(!chdir(passedPath))
         {
-            strcpy(bigLine,"Dir Changed!");
-            // writeToClient(bigLine);
+            strcpy(outgoingBuffer,"Dir Changed!");
+            // writeToClient(outgoingBuffer);
         }
         else
         {
-            strcpy(bigLine,"Error Changing Dir!");
+            strcpy(outgoingBuffer,"Error Changing Dir!");
             // printf("Error changing DIR\n");
         }
         writeToClient();
-        specialEndBig();
+        insertSpecialEndingChar();
         writeToClient();
         return 1;
     }
@@ -182,14 +182,14 @@ int checkForLocalCommand(char* command, char* passedPath)
         char buf[256];
         if(getcwd(buf,256))
         {
-            strcpy(bigLine,buf);
+            strcpy(outgoingBuffer,buf);
         }
         else
         {
-            strcpy(bigLine,"Error getting CWD!");
+            strcpy(outgoingBuffer,"Error getting CWD!");
         }
         writeToClient();
-        specialEndBig();
+        insertSpecialEndingChar();
         writeToClient();
         return 1;
     }
@@ -197,14 +197,14 @@ int checkForLocalCommand(char* command, char* passedPath)
     {
         if(!mkdir(passedPath, 0755))
         {
-            strcpy(bigLine,"Dir Created!");
+            strcpy(outgoingBuffer,"Dir Created!");
         }
         else
         {
-            strcpy(bigLine,"Error Creating Dir.");
+            strcpy(outgoingBuffer,"Error Creating Dir.");
         }
         writeToClient();
-        specialEndBig();
+        insertSpecialEndingChar();
         writeToClient();
         return 1;
     }
@@ -212,14 +212,14 @@ int checkForLocalCommand(char* command, char* passedPath)
     {
         if(!rmdir(passedPath))
         {
-            strcpy(bigLine,"Dir Deleted!");
+            strcpy(outgoingBuffer,"Dir Deleted!");
         }
         else
         {
-            strcpy(bigLine,"Could not delete dir!");
+            strcpy(outgoingBuffer,"Could not delete dir!");
         }
         writeToClient();
-        specialEndBig();
+        insertSpecialEndingChar();
         writeToClient();
         return 1;
     }
@@ -227,14 +227,14 @@ int checkForLocalCommand(char* command, char* passedPath)
     {
         if(!unlink(passedPath))
         {
-            strcpy(bigLine, "Deleted File!");
+            strcpy(outgoingBuffer, "Deleted File!");
         }
         else
         {
-            strcpy(bigLine,"Could not delete.");
+            strcpy(outgoingBuffer,"Could not delete.");
         }
         writeToClient();
-        specialEndBig();
+        insertSpecialEndingChar();
         writeToClient();
         return 1;
     }
@@ -265,7 +265,7 @@ int checkForLocalCommand(char* command, char* passedPath)
         else
             lsfile(path);
 
-        specialEndBig();
+        insertSpecialEndingChar();
         writeToClient();
 
         return 1;
@@ -274,16 +274,16 @@ int checkForLocalCommand(char* command, char* passedPath)
     {
         struct stat fstat, *sp;
         FILE* fp;
+        sp = &fstat;
         size_t len = MAX;
-        bigLine[0] = '\0';
-        char* bigLinePtr = bigLine;
+        outgoingBuffer[0] = '\0';
         // passedPath[strlen(passedPath)-1] = '\0';
         if ( (r = lstat(passedPath, &fstat)) < 0)
         {
             printf("COULD NO LSTAT");
-            bigLine[0] = '\0';
+            outgoingBuffer[0] = '\0';
             writeToClient();
-            // strcat(bigLine,"Error lsing file");
+            // strcat(outgoingBuffer,"Error lsing file");
             return -1;
         }
         fp = fopen(passedPath,"r");
@@ -291,18 +291,20 @@ int checkForLocalCommand(char* command, char* passedPath)
         if(fp == NULL)
         {
             printf("FP NULL\n");
-            bigLine[0] = '\0';
+            outgoingBuffer[0] = '\0';
             writeToClient();
             return -1;
         }
-        sprintf(bigLine,"%u",(unsigned)sp->st_size);
+        snprintf(outgoingBuffer,MAX,"%u",(unsigned)sp->st_size);
         writeToClient();
-        while(getline(&bigLinePtr,&len,fp)!= -1)
+        while(fread(outgoingBuffer,1,MAX,fp)) //fread(outgoingBuffer,MAX,1,fp)
         {
             writeToClient();
+            printf("BLP: %s\nlen: %u\n",outgoingBuffer,len);
         }
+        printf("BLP: %d",ferror(fp));        printf("closing\n");
         fclose(fp);
-
+        return 1;
     }
     else
     {
@@ -337,6 +339,7 @@ int server_init()
     listen(mysock, 5); // queue length = 5
     printf("=================== init done =======================\n");
 }
+
 int main()
 {
     char cwd[256];
@@ -384,8 +387,8 @@ int main()
             }
             // echo line to client
             n = write(csock, line, MAX);
-            specialEndBig();
-            n = write(csock,bigLine,MAX);
+            insertSpecialEndingChar();
+            n = write(csock,outgoingBuffer,MAX);
             printf("server: wrote n=%d bytes; ECHO=%s\n", n, line);
             printf("server: ready for next request\n");
         }

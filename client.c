@@ -346,7 +346,7 @@ while (1)
             while(size > 0)
             {
                 n = read(sock,ans,MAX);
-                for(int i =0; i < MAX && size > 0; ++i,--size)
+                for(int i =0; i < n && size > 0; ++i,--size)
                 {
                     fprintf(fp,"%c",ans[i]);
                 }
