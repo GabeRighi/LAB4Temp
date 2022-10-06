@@ -20,7 +20,7 @@ struct sockaddr_in server_addr;
 int sock, r;
 struct stat mystat, *sp;
 char *t1 = "xwrxwrxwr ";
-char *t2 = " ";
+char *t2 = "--------";
 
 int lsfile(char *fname)
 {
@@ -214,6 +214,50 @@ int checkForLocalCommand(char* command, char* passedPath)
         return 0;
     }
 }
+
+    int checkForOutgoingCommand(char* command)
+    {
+        if(!strcmp(command,"ls"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"rmdir"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"rm"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"pwd"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"rm"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"cd"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"mkdir"))
+        {
+            return 1;
+        }
+        else if(!strcmp(command,"get"))
+        {
+            return 2;
+        }
+        else if(!strcmp(command,"put"))
+        {
+            return 3;
+        }
+        else
+        {
+            return 0;
+        }
+    }
 int client_init()
 {
 
@@ -271,11 +315,51 @@ while (1)
     {
         continue;
     }
+    int commandNum = checkForOutgoingCommand(firstPart);
+    if(!commandNum)
+    {
+        printf("Invalid Command!\n");
+        continue;
+    }
     // Send line to server
     n = write(sock, line, MAX);
     printf("client: wrote n=%d bytes; line=%s\n", n, line);
     // Read a line from sock and show it
-    n = read(sock, ans, MAX);
-    printf("client: read n=%d bytes; echo=%s\n", n, ans);
+    char endingChar = 'a';
+    int first = 1;
+    int size = 0;
+    while(endingChar != '\x04')
+    {
+        n = read(sock, ans, MAX);
+        if(commandNum == 2)
+        {
+            if(ans[0] == '\0')
+            {
+                printf("File Could not be read!\n");
+                break;
+            }
+            size = atoi(ans);
+            FILE* fp;
+            char* line = NULL;
+            size_t len = MAX;
+            fp = fopen(secondPart,"w");
+            while(size > 0)
+            {
+                n = read(sock,ans,MAX);
+                for(int i =0; i < MAX && size > 0; ++i,--size)
+                {
+                    fprintf(fp,"%c",ans[i]);
+                }
+            }
+            fclose(fp);
+            break;
+        }
+        else
+        {
+            printf("%s\n",ans);
+            endingChar = ans[0];
+        }
+        
+    }   
 }
 }

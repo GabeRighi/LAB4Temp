@@ -21,9 +21,21 @@ int mysock, csock; // socket descriptors
 int r, len, n; // help variables
 struct stat mystat, *sp;
 char *t1 = "xwrxwrxwr ";
-char *t2 = " ";
+char *t2 = "--------";
 char bigLine[MAX];
 
+void writeToClient()
+{
+    n = write(csock, bigLine, MAX);
+    printf("server: wrote n=%d bytes; ECHO=%s\n", n, bigLine);
+    printf("server: ready for next request\n");
+}
+
+void specialEndBig()
+{
+    bigLine[0] = '\x04';
+    bigLine[1] = '\0';
+}
 int lsfile(char *fname)
 {
     int position = 0;
@@ -34,33 +46,34 @@ int lsfile(char *fname)
     if ( (r = lstat(fname, &fstat)) < 0)
     {
         printf("can't stat %s\n", fname);
-        strcat(bigLine,"Error lsing file")
+        strcat(bigLine,"Error lsing file");
         return -1;
     }
     if ((sp->st_mode & 0xF000) == 0x8000) // if (S ISREG())
-        // printf("%c",'-');
         bigLine[position++] = '-';
     if ((sp->st_mode & 0xF000) == 0x4000) // if (S ISDIR())
-        // printf("%c",'d');
         bigLine[position++] = 'd';
     if ((sp->st_mode & 0xF000) == 0xA000) // if (S ISLNK())
-        // printf("%c",'l');
         bigLine[position++] = 'l';
     for (i=8; i >= 0; --i )
     {
         if (sp->st_mode & (1 << i)) // print r|w|x
-            // printf("%c", t1[i]);
-            bigLine[position++] = t[i];
+        {
+            bigLine[position++] = t1[i];
+        }
         else
-            // printf("%c", t2[i]); // or print
+        {
             bigLine[position++] = t2[i];
+        }
     }
-    // printf("%4d ",sp->st_nlink); // link count
     char format[10];
     format[0] = '\0';
     bigLine[position] = '\0';
+    // printf("%4d ",sp->st_nlink); // link count
+    sprintf(format,"%4d ",sp->st_nlink);
+    strcat(bigLine,format);
     // printf("%4d ",sp->st_gid); // gid
-    spritnf(format, "%4d ",sp->st_gid);
+    sprintf(format, "%4d ",sp->st_gid);
     strcat(bigLine,format);
     // printf("%4d ",sp->st_uid); // uid
     sprintf(format,"%4d ",sp->st_uid);
@@ -76,7 +89,8 @@ int lsfile(char *fname)
     strcat(bigLine,ftime);
     // print name
     // printf("%s", basename(fname)); // print file basename
-    srtcat(bigLine,basename(fname));
+    strcat(bigLine, " ");
+    strcat(bigLine,basename(fname));
     // print > linkname if symbolic file
     if ((sp->st_mode & 0xF000)== 0xA000)
     {
@@ -87,7 +101,8 @@ int lsfile(char *fname)
         // printf("-> %s", linkname); // print linked name
         strcat(bigLine,linkname);
     }
-    strcat(bigLine,"\n");
+    writeToClient();
+    return 1;
     // printf("\n");
 
 }
@@ -116,12 +131,7 @@ int lsdir(char *dname)
     }
 }
 
-void writeToClient()
-{
-    n = write(csock, bigLine, MAX);
-    printf("server: wrote n=%d bytes; ECHO=%s\n", n, bigLine);
-    printf("server: ready for next request\n");
-}
+
 
 int checkForLocalCommand(char* command, char* passedPath)
 {
@@ -163,6 +173,8 @@ int checkForLocalCommand(char* command, char* passedPath)
             // printf("Error changing DIR\n");
         }
         writeToClient();
+        specialEndBig();
+        writeToClient();
         return 1;
     }
     else if (!strcmp("pwd", command))
@@ -170,48 +182,60 @@ int checkForLocalCommand(char* command, char* passedPath)
         char buf[256];
         if(getcwd(buf,256))
         {
-            printf("CWD: %s\n", buf);
+            strcpy(bigLine,buf);
         }
         else
         {
-            printf("Error getting CWD\n");
+            strcpy(bigLine,"Error getting CWD!");
         }
+        writeToClient();
+        specialEndBig();
+        writeToClient();
         return 1;
     }
     else if(!strcmp("mkdir",command))
     {
         if(!mkdir(passedPath, 0755))
         {
-            printf("File created!\n");
+            strcpy(bigLine,"Dir Created!");
         }
         else
         {
-            printf("Error creating file\n");
+            strcpy(bigLine,"Error Creating Dir.");
         }
+        writeToClient();
+        specialEndBig();
+        writeToClient();
         return 1;
     }
     else if(!strcmp("rmdir",command))
     {
         if(!rmdir(passedPath))
         {
-            printf("DIR deleted\n");
+            strcpy(bigLine,"Dir Deleted!");
         }
         else
         {
-            printf("Error deleting file\n");
+            strcpy(bigLine,"Could not delete dir!");
         }
+        writeToClient();
+        specialEndBig();
+        writeToClient();
         return 1;
     }
     else if(!strcmp("rm",command))
     {
         if(!unlink(passedPath))
         {
-            printf("File deleted\n");
+            strcpy(bigLine, "Deleted File!");
         }
         else
         {
-            printf("Error deleting file\n");
+            strcpy(bigLine,"Could not delete.");
         }
+        writeToClient();
+        specialEndBig();
+        writeToClient();
         return 1;
     }
     else if(!strcmp("ls",command))
@@ -220,7 +244,6 @@ int checkForLocalCommand(char* command, char* passedPath)
         int r;
         char *filename, path[1024], cwd[256];
         filename = "./"; // default to CWD
-        printf("P:%s\n",passedPath);
         if (passedPath)
         {
             filename = passedPath;
@@ -242,7 +265,44 @@ int checkForLocalCommand(char* command, char* passedPath)
         else
             lsfile(path);
 
+        specialEndBig();
+        writeToClient();
+
         return 1;
+    }
+    else if(!strcmp("get",command))
+    {
+        struct stat fstat, *sp;
+        FILE* fp;
+        size_t len = MAX;
+        bigLine[0] = '\0';
+        char* bigLinePtr = bigLine;
+        // passedPath[strlen(passedPath)-1] = '\0';
+        if ( (r = lstat(passedPath, &fstat)) < 0)
+        {
+            printf("COULD NO LSTAT");
+            bigLine[0] = '\0';
+            writeToClient();
+            // strcat(bigLine,"Error lsing file");
+            return -1;
+        }
+        fp = fopen(passedPath,"r");
+        printf("passed path: %s\n",passedPath);
+        if(fp == NULL)
+        {
+            printf("FP NULL\n");
+            bigLine[0] = '\0';
+            writeToClient();
+            return -1;
+        }
+        sprintf(bigLine,"%u",(unsigned)sp->st_size);
+        writeToClient();
+        while(getline(&bigLinePtr,&len,fp)!= -1)
+        {
+            writeToClient();
+        }
+        fclose(fp);
+
     }
     else
     {
@@ -279,6 +339,9 @@ int server_init()
 }
 int main()
 {
+    char cwd[256];
+    getcwd(cwd,256);
+    chroot(cwd);
     char line[MAX];
     char testLine[MAX];
     server_init();
@@ -321,6 +384,8 @@ int main()
             }
             // echo line to client
             n = write(csock, line, MAX);
+            specialEndBig();
+            n = write(csock,bigLine,MAX);
             printf("server: wrote n=%d bytes; ECHO=%s\n", n, line);
             printf("server: ready for next request\n");
         }
